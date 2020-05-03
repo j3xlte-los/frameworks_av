@@ -202,6 +202,10 @@ LOCAL_C_INCLUDES += \
 	$(TOP)/hardware/samsung/exynos4/include
 endif
 
+ifeq ($(BOARD_USE_SPRD_COLORFORMAT), true)
+LOCAL_CFLAGS += -DUSE_SPRD_COLORFORMAT
+endif
+
 LOCAL_MODULE:= libstagefright
 
 LOCAL_MODULE_TAGS := optional

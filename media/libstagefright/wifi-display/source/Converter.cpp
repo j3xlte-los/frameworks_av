@@ -169,7 +169,8 @@ status_t Converter::initEncoder() {
         mOutputFormat->setInt32("bitrate", audioBitrate);
     } else {
         mOutputFormat->setInt32("bitrate", videoBitrate);
-        mOutputFormat->setInt32("bitrate-mode", OMX_Video_ControlRateConstant);
+        // sprd encoder do not support OMX_Video_ControlRateConstant
+        mOutputFormat->setInt32("bitrate-mode", OMX_Video_ControlRateVariable);
         mOutputFormat->setInt32("frame-rate", 30);
         mOutputFormat->setInt32("i-frame-interval", 15);  // Iframes every 15 secs
 

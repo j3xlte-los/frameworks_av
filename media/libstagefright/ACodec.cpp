@@ -1031,7 +1031,7 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
     memset(&mLastNativeWindowCrop, 0, sizeof(mLastNativeWindowCrop));
     mLastNativeWindowDataSpace = HAL_DATASPACE_UNKNOWN;
 
-#ifdef USE_SAMSUNG_COLORFORMAT
+#if defined(USE_SAMSUNG_COLORFORMAT) || defined(USE_SPRD_COLORFORMAT)
     OMX_COLOR_FORMATTYPE eNativeColorFormat = def.format.video.eColorFormat;
     setNativeWindowColorFormat(eNativeColorFormat);
 #endif
@@ -1041,7 +1041,7 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
             nativeWindow,
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
-#ifdef USE_SAMSUNG_COLORFORMAT
+#if defined(USE_SAMSUNG_COLORFORMAT) || defined(USE_SPRD_COLORFORMAT)
             eNativeColorFormat,
 #else
             def.format.video.eColorFormat,
@@ -1420,6 +1420,24 @@ void ACodec::setNativeWindowColorFormat(OMX_COLOR_FORMATTYPE &eNativeColorFormat
         || !strcasecmp(mComponentName.c_str(), "OMX.SEC.FP.AVC.Decoder")
         || !strcasecmp(mComponentName.c_str(), "OMX.SEC.MPEG4.Decoder")
         || !strcasecmp(mComponentName.c_str(), "OMX.Exynos.AVC.Decoder")) {
+        switch (eNativeColorFormat) {
+            case OMX_COLOR_FormatYUV420SemiPlanar:
+                eNativeColorFormat = (OMX_COLOR_FORMATTYPE)HAL_PIXEL_FORMAT_YCbCr_420_SP;
+                break;
+            case OMX_COLOR_FormatYUV420Planar:
+            default:
+                eNativeColorFormat = (OMX_COLOR_FORMATTYPE)HAL_PIXEL_FORMAT_YCbCr_420_P;
+                break;
+        }
+    }
+}
+#endif
+
+#ifdef USE_SPRD_COLORFORMAT
+void ACodec::setNativeWindowColorFormat(OMX_COLOR_FORMATTYPE &eNativeColorFormat)
+{
+    // In case of SPRD, we set proper native color format for the Native Window
+    if (!strncasecmp(mComponentName.c_str(), "OMX.sprd", 8)) {
         switch (eNativeColorFormat) {
             case OMX_COLOR_FormatYUV420SemiPlanar:
                 eNativeColorFormat = (OMX_COLOR_FORMATTYPE)HAL_PIXEL_FORMAT_YCbCr_420_SP;
@@ -2391,6 +2409,10 @@ status_t ACodec::configureCodec(
     int32_t maxInputSize;
     if (msg->findInt32("max-input-size", &maxInputSize)) {
         err = setMinBufferSize(kPortIndexInput, (size_t)maxInputSize);
+        //sprd added. inputPort must be identical to output for raw decoder.
+        if ((err == OK) && !strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_RAW) ) {
+            err = setMinBufferSize(kPortIndexOutput, (size_t)maxInputSize);
+        }
     } else if (!strcmp("OMX.Nvidia.aac.decoder", mComponentName.c_str())) {
         err = setMinBufferSize(kPortIndexInput, 8192);  // XXX
     }
@@ -2408,6 +2430,28 @@ status_t ACodec::configureCodec(
     }
     if (rateFloat > 0) {
         err = setOperatingRate(rateFloat, video);
+    }
+
+    //check thumbnail mode
+    int32_t thumbnail;
+    if (msg->findInt32("thumbnail", &thumbnail)) {
+        OMX_INDEXTYPE index;
+
+        status_t err =
+            mOMX->getExtensionIndex(
+                    mNode,
+                    "OMX.sprd.index.ThumbnailMode",
+                    &index);
+
+        if (err == OK) {
+            OMX_BOOL enable = OMX_TRUE;
+            err = mOMX->setConfig(mNode, index, &enable, sizeof(enable));
+        }
+
+        if (err != OK) {
+            ALOGI("[%s] setConfig(OMX.sprd.index.ThumbnailMode') invalid 0x%08x",
+                    mComponentName.c_str(), err);
+        }
     }
 
     // NOTE: both mBaseOutputFormat and mOutputFormat are outputFormat to signal first frame.
